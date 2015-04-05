@@ -5,10 +5,11 @@
 #include <set>
 #include "bigData.hpp"
 
-const int MAX_NUM_ENTRIES = 149639105;
-const int MAX_NUM_USERS   =  22023547;
-const int MAX_NUM_ADS     =    641707; 
-const int MAX_NUM_THREADS =         4;
+const int MAX_NUM_ENTRIES       = 149639105;
+const int MAX_NUM_USERS         = 22023547;
+const int MAX_NUM_ADS           = 641707;
+const int MAX_NUM_THREADS       = 4;
+const int DATA_FILE_NUM_OF_LINE = 149639105;
 
 const string command_quit      = "quit";
 const string command_clicked   = "clicked";
@@ -16,8 +17,9 @@ const string command_get       = "get";
 const string command_impressed = "impressed";
 const string command_profit    = "profit";
 
-Data::Map dataMap(MAX_NUM_ENTRIES);             
-User::Map userMap(MAX_NUM_USERS);
+Data::Map dataMap(MAX_NUM_ENTRIES); // Key --> Value 
+User::Map userMap(MAX_NUM_USERS);   // UserID --> User
+Ad::Map adMap(MAX_NUM_ADS);         // AdID --> Ad
 
 void threadFunction(std::function<void(const Key& key)> find, std::function<void(const Key& key)> insert) {
 
@@ -106,10 +108,81 @@ void profit( uint32_t AdID, double clickThroughRateLowerBound ){
 
 }
 
+template <class int_type>
+inline int_type strToInt( char** str ){
+    int_type x = 0;
+    while( isspace(**str) )(*str)++;
+    while( !isspace(**str) ){
+        x = x*10 + **str - '0';
+        (*str)++;
+    }
+    return x;
+}
+inline size_t getFilesize(const char* filename) {
+    struct stat st;
+    stat(filename, &st);
+    return st.st_size;   
+}
+void read_data(const char* fileName){
+    size_t filesize = getFilesize(argv[1]);
+    int fd = open(argv[1], O_RDONLY, 0);
+    assert(fd != -1);
 
+    void* mmappedData = mmap(NULL, filesize, PROT_READ, MAP_PRIVATE | MAP_POPULATE, fd, 0);
+    assert(mmappedData != NULL);
+
+    char *p = (char*)mmappedData;
+
+
+    for (int i = 0 ; i < DATA_FILE_NUM_OF_LINE ; i++) {
+       std::unique_ptr<Data::Key>   key(new Data::Key);
+       std::unique_ptr<Data::Value> key(new Data::Value);
+       std::unique_ptr<Ad::AdInfo>  key(new Ad::AdInfo);
+       std::unique_ptr<Ad::Ad>      key(new Ad::Ad);
+//Click Impress URL_ID Ad_ID AdverID Dept Pos QueryID KeyWordID TitleID DescriptID UserID
+       value->click          = strToInt(&p);
+       value->impression     = strToInt(&p);
+       adInfo->displayURL    = strToInt(&p);
+       key->adID             = strToInt(&p);
+       ad->advertiserID      = strToInt(&p);
+       key->dept             = strToInt(&p);
+       key->position         = strToInt(&p);
+       key->queryID          = strToInt(&p);
+       adInfo->keywordID     = strToInt(&p);
+       adInfo->titleID       = strToInt(&p);
+       adInfo->descriptionID = strToInt(&p);
+       key->userID           = strToInt(&p);
+
+       dataMap.insert( std::make_pair(std::move(Key),std::move(Value)) );
+
+       /* Add entry to adMap */
+       // Ad* adBody = adMap.get( key.adID )
+       // if( !adBody )
+           // adMap.insert( std::make_pair( key->adID, ad ) ).first;
+       Ad& adBody = adMap.insertAndGet( std::make_pair( key->adID, ad ) );
+
+       adBody->information.push_back( adInfo ); 
+       auto record = adBody->clickThroughTable.find( userID );
+       if( record == adBody->clickThroughTable.end() )
+           adBody->clickThroughTable.insert( 
+               std::make_pair( userID, { value.click,value->impression,0,0 } )
+           );
+       else{
+           if(value->click)
+               adBody->clickThroughTable[ userID ].clickCount += value->click;
+           adBody->clickThroughTable[ userID ].impressionCount += value->impression;
+       }
+
+       /* add entry to userMap */
+       User* userBody = userMap.get( key->userID );
+       if( !userBody )
+           userMap.insert( std::make_pair( key->userID , unique_ptr<User::User>(new User::User()) );
+       userBody->impressions.insert( key->adID );  // The user has at least one impression
+    }
+}
 int main(int argc, char *argv[])
 {
-
+    read_data(argv[1]);
     string command;
     while( cin >> command && command != command_quit ){
         cout<<"********************\n";

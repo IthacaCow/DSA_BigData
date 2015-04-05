@@ -27,24 +27,26 @@
  * */
 
 #include <set>
+#include <memory>
 #include <vector>
 #include <iterator>
 #include "fcmm.hpp"
 
+using std::unique_ptr;
 using UserID = std::uint32_t;
 
 namespace Data {
     struct Key {
-        std::uint32_t UserID;
-        std::uint32_t AdID;
-        std::uint32_t QueryID;
-        std::uint32_t Position;
-        std::uint32_t Dept;
+        std::uint32_t userID;
+        std::uint32_t adID;
+        std::uint32_t queryID;
+        std::uint8_t position;
+        std::uint8_t dept;
         Key(uint32_t _UserID, uint32_t _AdID, uint32_t _QueryID, uint32_t _Position, uint32_t _Dept):
             UserID(_UserID),AdID(_AdID),Query(_QueryID),Position(_Position),Dept(_Dept){}
         bool operator==(const Key& rhs) const {
-            return rhs.UserID == UserID && rhs.AdID == AdID && rhs.QueryID == QueryID &&
-                   rhs.Position == Position && rhs.Dept == Dept;
+            return rhs.userID == userID && rhs.adID == adID && rhs.queryID == queryID &&
+                   rhs.position == position && rhs.dept == dept;
         }
         bool operator!=(const Key& rhs) const {
             return !operator==(rhs);
@@ -79,8 +81,8 @@ namespace Data {
     };
     
     struct Value {
-        std::uint32_t click;
-        std::uint32_t impression;
+        std::uint16_t click;
+        std::uint16_t impression;
 
         bool operator==(const Value& rhs) const {
             return rhs.click == click && rhs.impression == impression ;
@@ -92,50 +94,44 @@ namespace Data {
     };
 
     using Entry = std::pair<Key,Value>;
-    using Map   = fcmm::Fcmm<Key, Value, KeyHash1, KeyHash2> ;
+    using Map   = fcmm::Fcmm<Key, unique_ptr<Value>, KeyHash1, KeyHash2> ;
 }
 
 namespace Ad {
 
     struct ClickThrough {
-        int clickCount;
-        int impressionCount;
+        uint32_t clickCount;
+        uint32_t impressionCount;
         double rate;  // totalClicks / totalImpressions
     };
     struct Ad {
-        int id;
-        int advertiserID; 
-        vector<AdInfo> information;
-        fcmm::Fcmm<UserID,ClickThrough> clickThroughTable; // Use default hash function
+        uint32_t advertiserID; 
+        vector< unique_ptr<AdInfo> > information;
+        std::map< UserID,unique_ptr<ClickThrough> > clickThroughTable; // Use default hash function
     };
     struct AdInfo {
-        int displayURL; 
+        uint64_t displayURL; 
         int keywordID; 
         int titleID; 
         int descriptionID;
     }
-    using Map = fcmm::Fcmm<AdID, Ad*>; // Use default hash function
+    using Map = fcmm::Fcmm<AdID, unique_ptr<Ad> >; // Use default hash function
 }
 
 namespace User {
 
-    struct AdCompare {
-        bool operator() ( const Ad*& lhs, const Ad*& rhs ){
-            return lhs->id < rhs->id;
-        }
-    };
     struct Query {
         int id;
         Ad* ad;
     };
-    using Ads     = std::set<Ad*,User::AdCompare>;
-    using Queries = std::vector<User::Query*>;
+    using Ads     = std::set< uint32_t >; // A set of AdIDs
+    using Queries = std::vector< unique_ptr<User::Query> >;
     struct User {
         Ads impressions;  // All ads on which the user has at least one impression
         Queries clicks;   // All queris on which the user has at least one click
     };
-    using Entry = std::pair<UserID,User*>;
-    using Map   = fcmm::Fcmm<UserID, User*>; // Using default key hash
+    using Entry = std::pair< UserID,unique_ptr<User> >;
+    using Map   = fcmm::Fcmm< UserID, unique_ptr<User> >; // Using default key hash
 
 }
 

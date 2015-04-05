@@ -847,7 +847,15 @@ public:
     const Value& at(const Key& key) const {
         const const_iterator findIterator = find(key);
         if (findIterator == end()) {
-            throw std::out_of_range("Entry not found");
+            throw std::out_of_range("Key not found");
+        }
+        return findIterator->second;
+    }
+
+    Value* get(const Key& key) {
+        const const_iterator findIterator = find(key);
+        if (findIterator == end()) {
+           return NULL; 
         }
         return findIterator->second;
     }
@@ -859,7 +867,7 @@ public:
      * @param key                the key of the entry to be found
      * @throw std::out_of_range  thrown if no entry exists having key equal to `key`
      */
-    const Value& operator[](const Key& key) const {
+    Value* operator[](const Key& key) const {
         return at(key);
     }
 
@@ -911,6 +919,9 @@ public:
      */
     std::pair<const_iterator, bool> insert(const Entry& entry) {
         return insert(entry.first, [&entry](const Key&) -> const Value& { return entry.second; });
+    }
+    Value& insertAndGet(const Entry& entry) {
+        return insert(entry.first, [&entry](const Key&) -> const Value& { return entry.second; }).first->second;
     }
 
     /**
