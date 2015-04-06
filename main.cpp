@@ -3,6 +3,7 @@
 #include <iterator>
 #include <cstdio>
 #include <set>
+#include <unordered_map>
 #include "bigData.hpp"
 
 const int MAX_NUM_ENTRIES       = 149639105;
@@ -21,53 +22,6 @@ Data::Map dataMap(MAX_NUM_ENTRIES); // Key --> Value
 User::Map userMap(MAX_NUM_USERS);   // UserID --> User
 Ad::Map adMap(MAX_NUM_ADS);         // AdID --> Ad
 
-void threadFunction(std::function<void(const Key& key)> find, std::function<void(const Key& key)> insert) {
-
-    for (int i = 0; i < numOperationsPerThread; i++) {
-        std::uint32_t a = randNum(generator);
-        std::uint32_t b = randNum(generator);
-        std::uint32_t c = randNum(generator);
-        Key key(a, b, c);
-        if (randDouble(generator) < insertOperationsPercent) {
-            insert(key);
-        } else {
-            find(key);
-        }
-    }
-
-}
-
-template<typename ThreadFunction, typename... Args>
-void runThreads(int numThreads, ThreadFunction threadFunction, Args&&... threadFunctionArgs) {
-
-    std::vector<std::thread> threads;
-
-    for (int threadNo = 0; threadNo < MAX_NUM_THREADS; threadNo++) {
-        std::thread thread(threadFunction, threadNo, std::forward<Args>(threadFunctionArgs)...);
-        threads.push_back(std::move(thread));
-    }
-
-    for (std::thread& thread : threads) {
-        thread.join();
-    }
-
-}
-void runFcmm(int expectedNumEntries, int numThreads) {
-
-    FcmmType map(expectedNumEntries);
-
-    auto find = [&map](const Key& key) {
-        map.find(key);
-    };
-
-    auto insert = [&map](const Key& key) {
-        map.insert(key, calculate);
-    };
-
-    runThreads(find, insert);
-
-
-}
 void get( Data::Key key ){
    const Data::Value& v = dataMap.at( key ); 
    printf("%d %d\n", v.click, v.impression );
@@ -152,8 +106,12 @@ void read_data(const char* fileName){
        adInfo->titleID       = strToInt(&p);
        adInfo->descriptionID = strToInt(&p);
        key->userID           = strToInt(&p);
+       auto insertState = dataMap.insert( std::make_pair(std::move(Key),std::move(Value)) );
+       // The key is already in map 
+       if( !insertState.second ){
+           insertState.first->second->update(
 
-       dataMap.insert( std::make_pair(std::move(Key),std::move(Value)) );
+       }
 
        /* Add entry to adMap */
        // Ad* adBody = adMap.get( key.adID )
