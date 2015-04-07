@@ -29,9 +29,11 @@
 #include <set>
 #include <memory>
 #include <vector>
+#include <map>
+#include <unordered_map>
 #include <iterator>
 #include "fcmm.hpp"
-
+using ullint_t = unsigned long long int;
 using std::unique_ptr;
 using UserID = std::uint32_t;
 
@@ -50,17 +52,21 @@ namespace Data {
             return !operator==(rhs);
         }
 
+        Key(){}
+        Key(uint32_t u, uint32_t a, uint32_t q, uint8_t p, uint8_t d):
+            userID(u),adID(a),queryID(q),position(p),dept(d){}
+
     };
 
     struct KeyHash {
         std::size_t operator()(const Key& key) const {
             const std::size_t prime = 92821;
             std::size_t hash = 486187739;
-            hash = (hash * prime) ^ key.UserID;
-            hash = (hash * prime) ^ key.AdID;
-            hash = (hash * prime) ^ key.QueryID;
-            hash = (hash * prime) ^ key.Position;
-            hash = (hash * prime) ^ key.Dept;
+            hash = (hash * prime) ^ key.userID;
+            hash = (hash * prime) ^ key.adID;
+            hash = (hash * prime) ^ key.queryID;
+            hash = (hash * prime) ^ key.position;
+            hash = (hash * prime) ^ key.dept;
             return hash;
         }
     };
@@ -70,7 +76,7 @@ namespace Data {
         std::uint16_t click;
         std::uint16_t impression;
 
-        void update( const Value & User::Value rhs ){
+        void update( const Value & rhs ){
             click += rhs.click;
             impression += rhs.impression;
         }
@@ -89,7 +95,13 @@ namespace Ad {
         ClickThrough( uint32_t _clickCount ,uint32_t _impressionCount ,double _rate ): 
             clickCount(_clickCount), impressionCount(_impressionCount), rate(_rate){} 
     };
-    using Information = vector< unique_ptr<AdInfo> >;
+    struct AdInfo {
+        ullint_t displayURL; 
+        uint32_t keywordID; 
+        uint32_t titleID; 
+        uint32_t descriptionID;
+    };
+    using Information = std::vector< std::unique_ptr<AdInfo> >;
     using ClickThroughTable = std::map< uint32_t,unique_ptr<ClickThrough> >;
     struct Ad {
         uint32_t advertiserID; 
@@ -97,55 +109,53 @@ namespace Ad {
         // UserID --> clickThrough
         ClickThroughTable clickThroughTable;
 
-        void updateClickTable( uint32_t userID , const Value& value ){
+        void updateClickTable( uint32_t userID , const Data::Value& value ){
            auto record = clickThroughTable.find( userID );
            if( record == clickThroughTable.end() ){
                clickThroughTable.emplace( 
-                   userID,  new ClickThrough( value->click,value->impression,0.0 )
+                   userID,  new ClickThrough( value.click,value.impression,0.0 )
                );
            }
            else{
-               ClickThrough &entry = clickThroughTable[ userID ];
-               entry.impressionCount += value.impression;
+               auto& entry = clickThroughTable[ userID ];
+               entry->impressionCount += value.impression;
                if( value.click )
-                   entry.clickCount += value.click;
+                   entry->clickCount += value.click;
            }
 
         }
         void calculateClickThroughEach(){
-           for( ClickThroughTable::iterator entry = table.begin(); entry != table.end(); entry++ ) {
-                if( entry->second->clickCount )
-                    entry->second->rate = (double)entry->second->clickCount / entry->second->impressionCount;
+           for( auto& entry: clickThroughTable ) {
+                if( entry.second->clickCount )
+                    entry.second->rate = (double)entry.second->clickCount / entry.second->impressionCount;
            }
+           // for( ClickThroughTable::iterator entry = table.begin(); entry != table.end(); entry++ ) {
+                // if( entry->second->clickCount )
+                    // entry->second->rate = (double)entry->second->clickCount / entry->second->impressionCount;
+           // }
         }
     };
-    struct AdInfo {
-        uint64_t displayURL; 
-        int keywordID; 
-        int titleID; 
-        int descriptionID;
-    }
     // AdID --> Ad
-    using Map = std::unordered_map< uint32_t, unique_ptr<Ad::Ad> >; 
+    using Map = std::unordered_map<std::uint32_t, std::unique_ptr<Ad>>; 
 
     void calculateClickThroughRate( Map::iterator it, Map::iterator until ){
         for( ; it != until ; ++it )
-            it->calculateClickThroughEach();
+            it->second->calculateClickThroughEach();
     }
 }
 
 namespace User {
 
-    using Ads    = std::set< uint32_t >; // A set of AdIDs
-    using Clicks = std::vector< Key* >; // Ideally, there won't be duplicated elements
+    using Ads    = std::set< std::uint32_t >; // A set of AdIDs
+    using Clicks = std::vector< const Data::Key* >; // Ideally, there won't be duplicated elements
     struct User {
         Ads impressions;  // All ads on which the user has at least one impression
         Clicks clicks;   // All queries on which the user has at least one click
     };
     
-    using Map   = std::unordered_map< uint32_t, unique_ptr<User::User> >; // UserID --> User
+    using Map   = std::unordered_map< uint32_t, unique_ptr<User> >; // UserID --> User
 
-    void buildClicks( Data::Map::const_iterator from, Data::Map::const_iterator until ){
+    void buildClicks( Data::Map::iterator from, Data::Map::iterator until ){
     }
 
 }

@@ -4,7 +4,14 @@
 #include <iterator>
 #include <cstdio>
 #include <set>
+#include <string>
 #include <unordered_map>
+#include <sys/mman.h>
+#include <sys/types.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/stat.h>
+#include <assert.h>
 #include "bigData.hpp"
 
 const int MAX_NUM_ENTRIES       = 149639105;
@@ -13,17 +20,17 @@ const int MAX_NUM_ADS           = 641707;
 const int MAX_NUM_THREADS       = 4;
 const int DATA_FILE_NUM_OF_LINE = 149639105;
 
-const string command_quit      = "quit";
-const string command_clicked   = "clicked";
-const string command_get       = "get";
-const string command_impressed = "impressed";
-const string command_profit    = "profit";
+const std::string command_quit      = "quit";
+const std::string command_clicked   = "clicked";
+const std::string command_get       = "get";
+const std::string command_impressed = "impressed";
+const std::string command_profit    = "profit";
 
 Data::Map dataMap; // Key --> Value 
 User::Map userMap; // UserID --> User
 Ad::Map   adMap;   // AdID --> Ad
 
-void get( Data::Key key ){
+void get( Data::Key& key ){
    const Data::Value& v = dataMap[ key ]; 
    printf("%d %d\n", v.click, v.impression );
 }
@@ -31,7 +38,7 @@ void get( Data::Key key ){
 void clicked( uint32_t UserID ){
     User::Clicks& clicks = userMap[ UserID ]->clicks;
     for( User::Clicks::iterator c = clicks.begin(); c != clicks.end(); c++ ){
-        printf("%d %d\n", c->adID, c->userID);
+        printf("%d %d\n", (*c)->adID, (*c)->userID);
     }
 }
 //
@@ -46,25 +53,26 @@ void impressed( uint32_t UserID_1 , uint32_t UserID_2 ){
     User::Ads common;
     std::set_intersection(user1.begin(),user1.end(),user2.begin(),user2.end(),
                           std::inserter(common,common.begin()));
-    for( Ads::iterator ad = common.begin(); ad != common.bend(); ad++ ){
-        printf("%d\n",ad->id);
-        for( Information::iterator info = (ad->information).begin(); info != (ad->information).end(); info++ ){
-            printf("%llu %d %d %d %d\n",info->displayURL,
-                                          ad->advertiserID,
-                                        info->keywordID,
-                                        info->titleID,
-                                        info->descriptionID);
+    for( User::Ads::iterator id = common.begin(); id != common.end(); id++ ){
+        printf("%d\n",*id);
+        auto& ad = adMap[ *id ];
+        for( Ad::Information::iterator info = (ad->information).begin(); info != (ad->information).end(); info++ ){
+            printf("%llu %d %d %d %d\n",(*info)->displayURL,
+                                             ad->advertiserID,
+                                        (*info)->keywordID,
+                                        (*info)->titleID,
+                                        (*info)->descriptionID);
         }
     }
 }
 // output the sorted (UserID), line by line, whose click-through-rate 
 // (total click / total impression) on `AdID` is greater than or equal to `clickThroughRateLowerBound`.
-void profit( uint32_t AdID, double lowerBound ){
-   Ad::ClickThroughTable& table = adMap[ adID ]->clickThroughTable;
-   for( ClickThroughTable::iterator entry = table.begin(); entry != table.end(); entry++ ) {
-        if( entry->second->rate >= lowerBound )
-            printf("%d\n", entry->first);
-   }
+void profit( uint32_t adID, double lowerBound ){
+   // Ad::ClickThroughTable& table = adMap[ adID ]->clickThroughTable;
+   // for( Ad::ClickThroughTable::iterator entry = table.begin(); entry != table.end(); entry++ ) {
+        // if( entry->second->rate >= lowerBound )
+            // printf("%d\n", entry->first);
+   // }
 }
 
 void buildClickThroughTable(){
@@ -73,8 +81,8 @@ void buildClickThroughTable(){
     std::vector<std::thread> threads;
 
     int segLength = dataMap.size() / numThreads;
-    Data::Map::const_iterator from = dataMap.cbegin()
-    Data::Map::const_iterator until = next(from,segLength);
+    Data::Map::iterator from = dataMap.begin();
+    Data::Map::iterator until = std::next(from,segLength);
     for (int i = 0;;) {
         std::thread thread(User::buildClicks, from, until);
         threads.push_back(std::move(thread));
@@ -86,8 +94,8 @@ void buildClickThroughTable(){
         advance(until,segLength);
     }
 
-    if( end != dataMap.end() ){
-        User::buildClicks( from, dataMap.end() );
+    if( until != dataMap.end() ){
+        User::buildClicks( until, dataMap.end() );
     }
 
     for (std::thread& thread : threads) {
@@ -101,7 +109,7 @@ void calculateRate(){
     std::vector<std::thread> threads;
 
     int segLength = adMap.size() / numThreads;
-    Ad::Map::iterator from = adMap.cbegin()
+    Ad::Map::iterator from = adMap.begin();
     Ad::Map::iterator until = next(from,segLength);
     for (int i = 0;;) {
         std::thread thread(Ad::calculateClickThroughRate, from, until);
@@ -114,8 +122,8 @@ void calculateRate(){
         advance(until,segLength);
     }
 
-    if( end != adMap.end() ){
-        Ad::calculateClickThroughRate( end , adMap.end() );
+    if( until != adMap.end() ){
+        Ad::calculateClickThroughRate( until , adMap.end() );
     }
 
     for (std::thread& thread : threads) {
@@ -139,8 +147,8 @@ inline size_t getFilesize(const char* filename) {
     return st.st_size;   
 }
 void read_data(const char* fileName){
-    size_t filesize = getFilesize(argv[1]);
-    int fd = open(argv[1], O_RDONLY, 0);
+    size_t filesize = getFilesize(fileName);
+    int fd = open(fileName, O_RDONLY, 0);
     assert(fd != -1);
 
     void* mmappedData = mmap(NULL, filesize, PROT_READ, MAP_PRIVATE | MAP_POPULATE, fd, 0);
@@ -155,30 +163,30 @@ void read_data(const char* fileName){
        Data::Key   key;
        Data::Value value;
 
-       value.click           = strToInt(&p);
-       value.impression      = strToInt(&p);
-       adInfo->displayURL    = strToInt(&p);
-       key.adID              = strToInt(&p);
-       ad->advertiserID      = strToInt(&p);
-       key.dept              = strToInt(&p);
-       key.position          = strToInt(&p);
-       key.queryID           = strToInt(&p);
-       adInfo->keywordID     = strToInt(&p);
-       adInfo->titleID       = strToInt(&p);
-       adInfo->descriptionID = strToInt(&p);
-       key.userID            = strToInt(&p);
+       value.click           = strToInt<uint16_t>(&p);
+       value.impression      = strToInt<uint16_t>(&p);
+       adInfo->displayURL    = strToInt<ullint_t>(&p);
+       key.adID              = strToInt<uint32_t>(&p);
+       ad->advertiserID      = strToInt<uint32_t>(&p);
+       key.dept              = strToInt<uint8_t >(&p);
+       key.position          = strToInt<uint8_t >(&p);
+       key.queryID           = strToInt<uint32_t>(&p);
+       adInfo->keywordID     = strToInt<uint32_t>(&p);
+       adInfo->titleID       = strToInt<uint32_t>(&p);
+       adInfo->descriptionID = strToInt<uint32_t>(&p);
+       key.userID            = strToInt<uint32_t>(&p);
 
        auto insertedData = dataMap.emplace( key, value ) ;
        // The key is already in map 
        if( !insertedData.second )
-           insertedData.first->second->update( value );
+           insertedData.first->second.update( value );
 
-       auto insertedAdContent = adMap.emplace( key.adID, std::move(ad) ).first->second;
+       auto& insertedAdContent = adMap.emplace( key.adID, std::move(ad) ).first->second;
        insertedAdContent->information.push_back( std::move(adInfo) ); 
        insertedAdContent->updateClickTable( key.userID, value );
 
        /* add entry to userMap */
-       auto insertedUser = userMap.emplace( key.userID, unique_ptr<User::User>(new User::User()) ).first->second;
+       auto& insertedUser = userMap.emplace( key.userID, unique_ptr<User::User>(new User::User()) ).first->second;
        insertedUser->impressions.insert( key.adID ); // The user has at least one impression
        if( value.click ) // If there's at least one click
            insertedUser->clicks.push_back( &(insertedData.first->first) );
@@ -193,27 +201,32 @@ int main(int argc, char *argv[])
 
     read_data(argv[1]);
 
-    string command;
-    while( cin >> command && command != command_quit ){
-        cout<<"********************\n";
+    std::string command;
+
+    
+    uint32_t u,u1,a,q;
+    uint8_t p,d;
+    double theta;
+    while( std::cin >> command && command != command_quit ){
+        std::cout<<"********************\n";
         if( command == command_get ){
-            cin >> u >> a >> q >> p >> d;
+            std::cin >> u >> a >> q >> p >> d;
             Data::Key key( u,a,q,p,d );
             get( key );
         }
         else if( command == command_clicked ){
-            cin >> UserID;
-            clicked( UserID );
+            std::cin >> u;
+            clicked( u );
         }
         else if( command == command_impressed ){
-            cin >> UserID_1 >> UserID_2;
-            impressed( UserID_1 , UserID_2 );
+            std::cin >> u >> u1;
+            impressed( u , u1 );
         }
         else if( command == command_profit ){
-            cin >> AdID >> clickThroughRateLowerBound;
-            profit( AdID , clickThroughRateLowerBound );
+            std::cin >> a >> theta;
+            profit( a , theta );
         }
-        cout<<"********************\n";
+        std::cout<<"********************\n";
     }
     return 0;
 }
