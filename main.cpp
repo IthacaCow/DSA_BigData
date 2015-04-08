@@ -30,9 +30,9 @@ const std::string command_get       = "get";
 const std::string command_impressed = "impressed";
 const std::string command_profit    = "profit";
 
-Data::Map dataMap; // Key --> Value 
-User::Map userMap; // UserID --> User
-Ad::Map   adMap;   // AdID --> Ad
+Data::Map  dataMap; // Key --> Value
+Ad::Map    adMap;   // AdID --> Ad
+User::User userTable[ MAX_USER_ID ];
 
 void cleanUp(){
     for( auto&& it: userMap ){
@@ -48,7 +48,7 @@ void get( Data::Key& key ){
 }
 // output all (AdID, QueryID) pairs that user u has made at least one click
 void clicked( uint32_t UserID ){
-    User::Clicks& clicks = userMap[ UserID ]->clicks;
+    User::Clicks& clicks = userMap[ UserID ].clicks;
     for( User::Clicks::iterator c = clicks.begin(); c != clicks.end(); c++ ){
         printf("%d %d\n", (*c)->adID, (*c)->userID);
     }
@@ -59,8 +59,8 @@ void clicked( uint32_t UserID ){
 // that both users u1 and u2 has at least one impression on
 //
 void impressed( uint32_t UserID_1 , uint32_t UserID_2 ){
-    User::Ads& user1 = userMap[ UserID_1 ]->impressions;
-    User::Ads& user2 = userMap[ UserID_2 ]->impressions;
+    User::Ads& user1 = userTable[ UserID_1 ].impressions;
+    User::Ads& user2 = userTable[ UserID_2 ].impressions;
 
     User::Ads common;
     std::set_intersection(user1.begin(),user1.end(),user2.begin(),user2.end(),
@@ -196,25 +196,27 @@ void read_data(const char* fileName){
 
        auto insertedData = dataMap.emplace( key, value ) ;
        // The key is already in map 
-       if( !insertedData.second )
+       if( !insertedData.second ){
            insertedData.first->second.update( value );
+           continue;
+       }
 
        auto insertedAdContent = adMap.emplace( key.adID, ad ).first->second;
        insertedAdContent->information.push_back( adInfo ); 
-       insertedAdContent->updateClickTable( key.userID, value );
 
-       /* add entry to userMap */
-       auto insertedUser = userMap.emplace( key.userID, new User::User() ).first->second;
-       insertedUser->impressions.insert( key.adID ); // The user has at least one impression
+       /* add entry to userTable */
+       userTable[ key.userID ].impressions.insert( key.adID );
        if( value.click ) // If there's at least one click
-           insertedUser->clicks.push_back( &(insertedData.first->first) );
+           userTable[ key.userID ].clicks.push_back( &(insertedData.first->first) );
 
+
+       /* Seperate out */
+       insertedAdContent->updateClickTable( key.userID, value );
     }
 }
 int main(int argc, char *argv[])
 {
     dataMap.reserve( MAX_NUM_ENTRIES ); 
-    userMap.reserve( MAX_NUM_USERS );
       adMap.reserve( MAX_NUM_ADS );
 
     auto t0 = Clock::now();

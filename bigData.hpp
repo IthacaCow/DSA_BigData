@@ -45,7 +45,6 @@
  */
 
 #include <set>
-#include <memory>
 #include <vector>
 #include <map>
 #include <unordered_map>
@@ -121,8 +120,14 @@ namespace Ad {
         uint32_t titleID; 
         uint32_t descriptionID;
     };
-    using Information = std::vector< AdInfo* >;
+    using Information = std::set< AdInfo*, Data::InfoComparator >;
     using ClickThroughTable = std::map< uint32_t,ClickThrough* >;
+    struct InfoComparator {
+        bool operator() ( const AdInfo* lhs, const AdInfo* rhs ) const {
+            return (lhs->keywordID < rhs.keywordID) || 
+                   ( lhs->keywordID == rhs.keywordID && lhs->displayURL < rhs->displayURL);
+        }
+    }
     struct Ad {
         ushint_t advertiserID; 
         Information information;
@@ -172,14 +177,19 @@ namespace Ad {
 namespace User {
 
     using Ads    = std::set< std::uint32_t >; // A set of AdIDs
-    using Clicks = std::vector< const Data::Key* >; // Ideally, there won't be duplicated elements
+    using Clicks = std::set< const Data::Key*, Data::ClickComparator >; // Ideally, there won't be duplicated elements
+    struct ClickComparator {
+        bool operator() ( const Data::Key* lhs, const Data::Key* rhs ) const {
+            return (lhs->adID < rhs->adID) || ( lhs->adID == rhs->adID && lhs->queryID < rhs->queryID);
+        }
+    }
     struct User {
+        uint32_t clickCount;
+        uint32_t impressionCount;
         Ads impressions;  // All ads on which the user has at least one impression
         Clicks clicks;   // All queries on which the user has at least one click
     };
     
-    using Map   = std::unordered_map< uint32_t, User* >; // UserID --> User
-
     void buildClicks( Data::Map::iterator from, Data::Map::iterator until ){
     }
 
