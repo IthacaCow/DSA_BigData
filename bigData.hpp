@@ -26,6 +26,24 @@
  *
  * */
 
+/*
+ * Maximum Value:
+ *
+    Click = 39900
+    Impression = 764404
+    DisplayURL = 18,445,899,849,997,222,722
+    AdID = 22238277
+    AdvertiserID = 39191
+    Depth = 3
+    Position = 3
+    QueryID = 26243605
+    KeywordID = 1249783
+    TitleID = 4051439
+    DescriptionID = 3171828
+    UserID = 23907634
+
+ */
+
 #include <set>
 #include <memory>
 #include <vector>
@@ -34,9 +52,11 @@
 #include <iterator>
 #include "fcmm.hpp"
 using ullint_t = unsigned long long int;
+using ushint_t = unsigned short;
 using std::unique_ptr;
 using UserID = std::uint32_t;
 
+const int MAX_USER_ID = 23907635;
 namespace Data {
     struct Key {
         std::uint32_t userID;
@@ -74,7 +94,7 @@ namespace Data {
     
     struct Value {
         std::uint16_t click;
-        std::uint16_t impression;
+        std::uint32_t impression;
 
         void update( const Value & rhs ){
             click += rhs.click;
@@ -101,14 +121,13 @@ namespace Ad {
         uint32_t titleID; 
         uint32_t descriptionID;
     };
-    using Information = std::vector< std::unique_ptr<AdInfo> >;
-    using ClickThroughTable = std::map< uint32_t,unique_ptr<ClickThrough> >;
+    using Information = std::vector< AdInfo* >;
+    using ClickThroughTable = std::map< uint32_t,ClickThrough* >;
     struct Ad {
-        uint32_t advertiserID; 
+        ushint_t advertiserID; 
         Information information;
         // UserID --> clickThrough
         ClickThroughTable clickThroughTable;
-
         void updateClickTable( uint32_t userID , const Data::Value& value ){
            auto record = clickThroughTable.find( userID );
            if( record == clickThroughTable.end() ){
@@ -134,9 +153,15 @@ namespace Ad {
                     // entry->second->rate = (double)entry->second->clickCount / entry->second->impressionCount;
            // }
         }
+        ~Ad(){
+            for( auto info: information )
+                delete info;
+            for( auto&& it: clickThroughTable )
+                delete it.second;
+        }
     };
     // AdID --> Ad
-    using Map = std::unordered_map<std::uint32_t, std::unique_ptr<Ad>>; 
+    using Map = std::unordered_map< std::uint32_t, Ad* >; 
 
     void calculateClickThroughRate( Map::iterator it, Map::iterator until ){
         for( ; it != until ; ++it )
@@ -153,7 +178,7 @@ namespace User {
         Clicks clicks;   // All queries on which the user has at least one click
     };
     
-    using Map   = std::unordered_map< uint32_t, unique_ptr<User> >; // UserID --> User
+    using Map   = std::unordered_map< uint32_t, User* >; // UserID --> User
 
     void buildClicks( Data::Map::iterator from, Data::Map::iterator until ){
     }

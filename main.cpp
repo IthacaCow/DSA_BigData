@@ -1,5 +1,7 @@
 #include <iostream>
+#include <chrono>
 #include <thread>
+#include <algorithm>
 #include <vector>
 #include <iterator>
 #include <cstdio>
@@ -14,11 +16,13 @@
 #include <assert.h>
 #include "bigData.hpp"
 
-const int MAX_NUM_ENTRIES       = 149639105;
-const int MAX_NUM_USERS         = 22023547;
-const int MAX_NUM_ADS           = 641707;
-const int MAX_NUM_THREADS       = 4;
-const int DATA_FILE_NUM_OF_LINE = 149639105;
+typedef std::chrono::high_resolution_clock Clock;
+typedef std::chrono::minutes minutes;
+
+const int MAX_NUM_ENTRIES = 149639105;
+const int MAX_NUM_USERS   = 22023547;
+const int MAX_NUM_ADS     = 641707;
+const int MAX_NUM_THREADS = 4;
 
 const std::string command_quit      = "quit";
 const std::string command_clicked   = "clicked";
@@ -30,6 +34,14 @@ Data::Map dataMap; // Key --> Value
 User::Map userMap; // UserID --> User
 Ad::Map   adMap;   // AdID --> Ad
 
+void cleanUp(){
+    for( auto&& it: userMap ){
+        delete it.second;
+    }
+    for( auto&& it: adMap ){
+        delete it.second;
+    }
+}
 void get( Data::Key& key ){
    const Data::Value& v = dataMap[ key ]; 
    printf("%d %d\n", v.click, v.impression );
@@ -68,11 +80,11 @@ void impressed( uint32_t UserID_1 , uint32_t UserID_2 ){
 // output the sorted (UserID), line by line, whose click-through-rate 
 // (total click / total impression) on `AdID` is greater than or equal to `clickThroughRateLowerBound`.
 void profit( uint32_t adID, double lowerBound ){
-   // Ad::ClickThroughTable& table = adMap[ adID ]->clickThroughTable;
-   // for( Ad::ClickThroughTable::iterator entry = table.begin(); entry != table.end(); entry++ ) {
-        // if( entry->second->rate >= lowerBound )
-            // printf("%d\n", entry->first);
-   // }
+   Ad::ClickThroughTable& table = adMap[ adID ]->clickThroughTable;
+   for( Ad::ClickThroughTable::iterator entry = table.begin(); entry != table.end(); entry++ ) {
+        if( entry->second->rate >= lowerBound )
+            printf("%d\n", entry->first);
+   }
 }
 
 void buildClickThroughTable(){
@@ -151,23 +163,29 @@ void read_data(const char* fileName){
     int fd = open(fileName, O_RDONLY, 0);
     assert(fd != -1);
 
+    auto mmap_t0 = Clock::now();
+
     void* mmappedData = mmap(NULL, filesize, PROT_READ, MAP_PRIVATE | MAP_POPULATE, fd, 0);
     assert(mmappedData != NULL);
 
     char *p = (char*)mmappedData;
 
+    auto mmap_t1 = Clock::now();
 
-    for (int i = 0 ; i < DATA_FILE_NUM_OF_LINE ; i++) {
-       std::unique_ptr<Ad::AdInfo> adInfo(new Ad::AdInfo());
-       std::unique_ptr<Ad::Ad>     ad(new Ad::Ad());
+    minutes m = std::chrono::duration_cast<minutes>(mmap_t1 - mmap_t0);
+    std::cout <<"mmap: time elapsed: "<< m.count() << "min\n";
+
+    for (int i = 0 ; i < MAX_NUM_ENTRIES ; i++) {
+       auto adInfo = new Ad::AdInfo();
+       auto ad     = new Ad::Ad();
        Data::Key   key;
        Data::Value value;
 
        value.click           = strToInt<uint16_t>(&p);
-       value.impression      = strToInt<uint16_t>(&p);
+       value.impression      = strToInt<uint32_t>(&p);
        adInfo->displayURL    = strToInt<ullint_t>(&p);
        key.adID              = strToInt<uint32_t>(&p);
-       ad->advertiserID      = strToInt<uint32_t>(&p);
+       ad->advertiserID      = strToInt<ushint_t>(&p);
        key.dept              = strToInt<uint8_t >(&p);
        key.position          = strToInt<uint8_t >(&p);
        key.queryID           = strToInt<uint32_t>(&p);
@@ -181,12 +199,12 @@ void read_data(const char* fileName){
        if( !insertedData.second )
            insertedData.first->second.update( value );
 
-       auto& insertedAdContent = adMap.emplace( key.adID, std::move(ad) ).first->second;
-       insertedAdContent->information.push_back( std::move(adInfo) ); 
+       auto insertedAdContent = adMap.emplace( key.adID, ad ).first->second;
+       insertedAdContent->information.push_back( adInfo ); 
        insertedAdContent->updateClickTable( key.userID, value );
 
        /* add entry to userMap */
-       auto& insertedUser = userMap.emplace( key.userID, unique_ptr<User::User>(new User::User()) ).first->second;
+       auto insertedUser = userMap.emplace( key.userID, new User::User() ).first->second;
        insertedUser->impressions.insert( key.adID ); // The user has at least one impression
        if( value.click ) // If there's at least one click
            insertedUser->clicks.push_back( &(insertedData.first->first) );
@@ -199,7 +217,13 @@ int main(int argc, char *argv[])
     userMap.reserve( MAX_NUM_USERS );
       adMap.reserve( MAX_NUM_ADS );
 
+    auto t0 = Clock::now();
     read_data(argv[1]);
+    auto t1 = Clock::now();
+
+    minutes m = std::chrono::duration_cast<minutes>(t1 - t0);
+    std::cout <<"Read data: time elapsed: "<< m.count() << "min\n";
+
 
     std::string command;
 
@@ -228,5 +252,7 @@ int main(int argc, char *argv[])
         }
         std::cout<<"********************\n";
     }
+
+    cleanUp();
     return 0;
 }
