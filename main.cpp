@@ -1,6 +1,5 @@
 #include <iostream>
 #include <chrono>
-#include <thread>
 #include <algorithm>
 #include <vector>
 #include <iterator>
@@ -14,12 +13,16 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <assert.h>
+#include "debug.hpp"
 #include "bigData.hpp"
+
+using namespace std;
 
 typedef std::chrono::high_resolution_clock Clock;
 typedef std::chrono::minutes minutes;
 
-const int MAX_NUM_ENTRIES = 149639105;
+// const int MAX_NUM_ENTRIES = 149639105;
+const int MAX_NUM_ENTRIES = 11;
 const int MAX_NUM_USERS   = 22023547;
 const int MAX_NUM_ADS     = 641707;
 const int MAX_NUM_THREADS = 4;
@@ -34,10 +37,9 @@ Data::Map  dataMap; // Key --> Value
 Ad::Map    adMap;   // AdID --> Ad
 User::User userTable[ MAX_USER_ID ];
 
+void calculateRate(Ad::ClickThroughTable& table);
+
 void cleanUp(){
-    for( auto&& it: userMap ){
-        delete it.second;
-    }
     for( auto&& it: adMap ){
         delete it.second;
     }
@@ -48,9 +50,9 @@ void get( Data::Key& key ){
 }
 // output all (AdID, QueryID) pairs that user u has made at least one click
 void clicked( uint32_t UserID ){
-    User::Clicks& clicks = userMap[ UserID ].clicks;
+    User::Clicks& clicks = userTable[ UserID ].clicks;
     for( User::Clicks::iterator c = clicks.begin(); c != clicks.end(); c++ ){
-        printf("%d %d\n", (*c)->adID, (*c)->userID);
+        printf("%d %d\n", c->first, c->second); // AdID , QueryID
     }
 }
 //
@@ -68,9 +70,11 @@ void impressed( uint32_t UserID_1 , uint32_t UserID_2 ){
     for( User::Ads::iterator id = common.begin(); id != common.end(); id++ ){
         printf("%d\n",*id);
         auto& ad = adMap[ *id ];
+
+        /* TODO Eliminate duplicate */
         for( Ad::Information::iterator info = (ad->information).begin(); info != (ad->information).end(); info++ ){
             printf("%llu %d %d %d %d\n",(*info)->displayURL,
-                                             ad->advertiserID,
+                                        (*info)->advertiserID,
                                         (*info)->keywordID,
                                         (*info)->titleID,
                                         (*info)->descriptionID);
@@ -82,76 +86,19 @@ void impressed( uint32_t UserID_1 , uint32_t UserID_2 ){
 void profit( uint32_t adID, double lowerBound ){
    Ad::ClickThroughTable& table = adMap[ adID ]->clickThroughTable;
    for( Ad::ClickThroughTable::iterator entry = table.begin(); entry != table.end(); entry++ ) {
-        if( entry->second->rate >= lowerBound )
+        if( entry->second->clickCount >= (double)entry->second->impressionCount * lowerBound )
             printf("%d\n", entry->first);
    }
 }
 
-void buildClickThroughTable(){
-
-    int numThreads = 2;
-    std::vector<std::thread> threads;
-
-    int segLength = dataMap.size() / numThreads;
-    Data::Map::iterator from = dataMap.begin();
-    Data::Map::iterator until = std::next(from,segLength);
-    for (int i = 0;;) {
-        std::thread thread(User::buildClicks, from, until);
-        threads.push_back(std::move(thread));
-
-        if( ++i == numThreads )
-            break;
-
-        from = until;
-        advance(until,segLength);
-    }
-
-    if( until != dataMap.end() ){
-        User::buildClicks( until, dataMap.end() );
-    }
-
-    for (std::thread& thread : threads) {
-        thread.join();
-    }
-
-}
-void calculateRate(){
-
-    int numThreads = 2;
-    std::vector<std::thread> threads;
-
-    int segLength = adMap.size() / numThreads;
-    Ad::Map::iterator from = adMap.begin();
-    Ad::Map::iterator until = next(from,segLength);
-    for (int i = 0;;) {
-        std::thread thread(Ad::calculateClickThroughRate, from, until);
-        threads.push_back(std::move(thread));
-
-        if( ++i == numThreads )
-            break;
-
-        from = until;
-        advance(until,segLength);
-    }
-
-    if( until != adMap.end() ){
-        Ad::calculateClickThroughRate( until , adMap.end() );
-    }
-
-    for (std::thread& thread : threads) {
-        thread.join();
-    }
-}
-
 template <class int_type>
-inline int_type strToInt( char** str ){
-    int_type x = 0;
+inline void strToInt( int_type& x, char** str ){
+    x = 0;
     while( isspace(**str) )(*str)++;
     while( !isspace(**str) ){
         x = x*10 + **str - '0';
         (*str)++;
     }
-    return x;
 }
 inline size_t getFilesize(const char* filename) {
     struct stat st;
@@ -175,43 +122,80 @@ void read_data(const char* fileName){
     minutes m = std::chrono::duration_cast<minutes>(mmap_t1 - mmap_t0);
     std::cout <<"mmap: time elapsed: "<< m.count() << "min\n";
 
+    std::cout<<"Click Impress URL_ID Ad_ID AdverID Dept Pos QueryID KeyWordID TitleID DescriptID UserID"<<std::endl;
     for (int i = 0 ; i < MAX_NUM_ENTRIES ; i++) {
        auto adInfo = new Ad::AdInfo();
        auto ad     = new Ad::Ad();
        Data::Key   key;
        Data::Value value;
 
-       value.click           = strToInt<uint16_t>(&p);
-       value.impression      = strToInt<uint32_t>(&p);
-       adInfo->displayURL    = strToInt<ullint_t>(&p);
-       key.adID              = strToInt<uint32_t>(&p);
-       ad->advertiserID      = strToInt<ushint_t>(&p);
-       key.dept              = strToInt<uint8_t >(&p);
-       key.position          = strToInt<uint8_t >(&p);
-       key.queryID           = strToInt<uint32_t>(&p);
-       adInfo->keywordID     = strToInt<uint32_t>(&p);
-       adInfo->titleID       = strToInt<uint32_t>(&p);
-       adInfo->descriptionID = strToInt<uint32_t>(&p);
-       key.userID            = strToInt<uint32_t>(&p);
+       strToInt<uint16_t>( value.click,           &p);
+       strToInt<uint32_t>( value.impression,      &p);
+       strToInt<ullint_t>( adInfo->displayURL,    &p);
+       strToInt<uint32_t>( key.adID,              &p);
+       strToInt<ushint_t>( adInfo->advertiserID,  &p);
+       strToInt<uint8_t >( key.dept,              &p);
+       strToInt<uint8_t >( key.position,          &p);
+       strToInt<uint32_t>( key.queryID,           &p);
+       strToInt<uint32_t>( adInfo->keywordID,     &p);
+       strToInt<uint32_t>( adInfo->titleID,       &p);
+       strToInt<uint32_t>( adInfo->descriptionID, &p);
+       strToInt<uint32_t>( key.userID,            &p);
+
+  std::cout<< value.click << " "
+           << value.impression<< " "
+           << adInfo->displayURL<< " "
+           << key.adID<< " "
+           << adInfo->advertiserID<< " "
+           << (int)key.dept<< " "
+           << (int)key.position<< " "
+           << key.queryID<< " "
+           << adInfo->keywordID<< " "
+           << adInfo->titleID<< " "
+           << adInfo->descriptionID<< " "
+           << key.userID<< " \n" ;
+
+       /* If duplicate found? */
+       /* Implement a duplicate finder at request time */
+       auto insertedAd = adMap.emplace( key.adID, ad );
+       if( !insertedAd.second ){
+           std::cout<<" Ad Entry exist! \n";
+           delete ad;
+       }
+       else{
+           insertedAd.first->second->information.push_back( adInfo );
+       }
+
+       /* add entry to userTable */
+       userTable[ key.userID ].impressions.insert( key.adID );
+
+       printImpression( userTable[ key.userID ].impressions );
 
        auto insertedData = dataMap.emplace( key, value ) ;
        // The key is already in map 
        if( !insertedData.second ){
+           std::cout<<"Data Entry exist! \n";
            insertedData.first->second.update( value );
+           if( value.click && userTable[ key.userID ].clicks.empty() ){
+               cout<<" At least one click"<<std::endl;
+               userTable[ key.userID ].clicks.push_back( std::pair<uint32_t,uint32_t>(key.adID,key.queryID) ); 
+               // Insert AdID, QueryID pair
+               
+               printClick( userTable[ key.userID ].clicks );
+
+           }
            continue;
        }
 
-       auto insertedAdContent = adMap.emplace( key.adID, ad ).first->second;
-       insertedAdContent->information.push_back( adInfo ); 
+       if( value.click ){ // If there's at least one click
+           cout<<" At least one click"<<std::endl;
+           userTable[ key.userID ].clicks.push_back( std::pair<uint32_t,uint32_t>(key.adID,key.queryID) ); 
+           // Insert AdID, QueryID pair
+           
+           printClick( userTable[ key.userID ].clicks );
+       }
 
-       /* add entry to userTable */
-       userTable[ key.userID ].impressions.insert( key.adID );
-       if( value.click ) // If there's at least one click
-           userTable[ key.userID ].clicks.push_back( &(insertedData.first->first) );
 
-
-       /* Seperate out */
-       insertedAdContent->updateClickTable( key.userID, value );
     }
 }
 int main(int argc, char *argv[])
