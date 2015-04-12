@@ -22,7 +22,7 @@ typedef std::chrono::high_resolution_clock Clock;
 typedef std::chrono::seconds seconds;
 
 // const int MAX_NUM_ENTRIES = 149639105;
-const int MAX_NUM_ENTRIES = 17;
+const int MAX_NUM_ENTRIES = 300500;
 const int MAX_NUM_USERS   = 22023547;
 const int MAX_NUM_ADS     = 641707;
 const int MAX_NUM_THREADS = 4;
@@ -230,9 +230,9 @@ void read_data(const char* fileName){
            printClick( userTable[ key.userID ].clicks );
 #endif
 
-#ifdef DEBUG
-       if( i % 10000000 == 0 ) {
-           printf("%f % \n",100.0*(float)i/MAX_NUM_ENTRIES);
+#ifdef BENCHMARK
+       if( i % 100 == 0 ) {
+           printf("%f % \n",i);
        }
 #endif
 
