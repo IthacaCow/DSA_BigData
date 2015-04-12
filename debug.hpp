@@ -5,5 +5,8 @@
 
 void printClick( User::Clicks& v );
 
+void printDataMap( Data::Map& dataMap );
+
 void printImpression( User::Ads& s );
+
 #endif

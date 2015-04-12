@@ -65,8 +65,13 @@ namespace Ad {
         uint32_t clickCount;
         uint32_t impressionCount;
 
-        ClickThrough( uint32_t _clickCount ,uint32_t _impressionCount ): 
-            clickCount(_clickCount), impressionCount(_impressionCount){} 
+        ClickThrough(){
+            clickCount = impressionCount = 0;
+        }
+        void add( Data::Value& value ){
+            if( value.click )clickCount += value.click;
+            impressionCount += value.impression;
+        }
     };
     struct AdInfo {
         ushint_t advertiserID; 
@@ -74,58 +79,50 @@ namespace Ad {
         uint32_t keywordID; 
         uint32_t titleID; 
         uint32_t descriptionID;
+
     };
-    using Information = std::vector< AdInfo* >;
-    // using Information = std::map< AdInfo*, Ad::InfoComparator >;
-    using ClickThroughTable = std::map< uint32_t,ClickThrough* >;
     struct InfoComparator {
         bool operator() ( const AdInfo* lhs, const AdInfo* rhs ) {
-            return ( lhs->keywordID < rhs->keywordID ) || 
-                   ( lhs->keywordID == rhs->keywordID && lhs->displayURL < rhs->displayURL);
+            if( lhs->keywordID < rhs->keywordID )  
+                return true;
+            if( lhs->keywordID > rhs->keywordID )  
+                return false;
+            if( lhs->advertiserID < rhs->advertiserID )  
+                return true;
+            if( lhs->advertiserID > rhs->advertiserID )  
+                return false;
+            if( lhs->titleID < rhs->titleID )  
+                return true;
+            if( lhs->titleID > rhs->titleID )  
+                return false;
+            if( lhs->descriptionID < rhs->descriptionID )  
+                return true;
+            if( lhs->descriptionID > rhs->descriptionID )  
+                return false;
+            if( lhs->displayURL < rhs->displayURL )  
+                return true;
+            if( lhs->displayURL > rhs->displayURL )  
+                return false;
+            return false;
         }
     };
+    using ClickThroughTable = std::map< uint32_t,ClickThrough >;
     struct Ad {
-        Information information;
         // UserID --> clickThrough
         ClickThroughTable clickThroughTable;
-        void updateClickTable( uint32_t userID , const Data::Value& value ){
-           auto record = clickThroughTable.find( userID );
-           if( record == clickThroughTable.end() ){
-               clickThroughTable.emplace( 
-                   userID,  new ClickThrough( value.click,value.impression )
-               );
-           }
-           else{
-               auto& entry = clickThroughTable[ userID ];
-               entry->impressionCount += value.impression;
-               if( value.click )
-                   entry->clickCount += value.click;
-           }
-
-        }
-        ~Ad(){
-            for( auto info: information )
-                delete info;
-            for( auto&& it: clickThroughTable )
-                delete it.second;
-        }
     };
     // AdID --> Ad
     using Map = std::unordered_map< std::uint32_t, Ad* >; 
+    using InfoTable = std::set< AdInfo*, InfoComparator >;
 
-    // void calculateRate(Ad::ClickThroughTable& table){
-       // double rate = 0.0;
-       // for( auto& entry: clickThroughTable ) {
-            // if( entry.second->clickCount )
-                // rate = (double)entry.second->clickCount / entry.second->impressionCount;
-       // }
-    // }
 }
 
 namespace User {
 
     struct ClickComparator; 
-    using Ads    = std::set< std::uint32_t >; // A set of AdIDs
+    // using InfoPair = std::pair<uint32_t,Ad::InfoTable::iterator>;
+    using InfoPair = std::pair<uint32_t,Ad::AdInfo*>;
+    using Ads    = std::set< InfoPair >; // A set of AdIDs + Info
     using Clicks = std::vector< std::pair<uint32_t,uint32_t> >; 
     // TODO: Check duplicate
 
@@ -134,9 +131,15 @@ namespace User {
             return (lhs->adID < rhs->adID) || ( lhs->adID == rhs->adID && lhs->queryID < rhs->queryID);
         }
     };
+    // struct InfoPairComparator{
+        // bool operator() ( const InfoPair& lhs, const InfoPair& rhs ) {
+            // return (lhs.first < rhs.first) || ( lhs.first == rhs.first && *(lhs.second) < *(rhs.second));
+        // }
+    // };
     struct User {
         Ads impressions;  // All ads on which the user has at least one impression
         Clicks clicks;   // All queries on which the user has at least one click
+
     };
     
 

@@ -1,4 +1,5 @@
 #include <iostream>
+#include <parallel/algorithm>
 #include <chrono>
 #include <algorithm>
 #include <vector>
@@ -35,6 +36,7 @@ const std::string command_profit    = "profit";
 
 Data::Map  dataMap; // Key --> Value
 Ad::Map    adMap;   // AdID --> Ad
+Ad::InfoTable infoTable;
 User::User userTable[ MAX_USER_ID ];
 
 void calculateRate(Ad::ClickThroughTable& table);
@@ -43,8 +45,16 @@ void cleanUp(){
     for( auto&& it: adMap ){
         delete it.second;
     }
+    for( auto&& it: infoTable ){
+        delete it;
+    }
 }
 void get( Data::Key& key ){
+
+#ifdef DEBUG
+   cout<<"Input: "<<key.userID<<" "<<key.adID<<" "<<key.queryID<<" "<<(int)key.position<<" "<<(int)key.dept<<endl;
+#endif
+
    const Data::Value& v = dataMap[ key ]; 
    printf("%d %d\n", v.click, v.impression );
 }
@@ -61,33 +71,46 @@ void clicked( uint32_t UserID ){
 // that both users u1 and u2 has at least one impression on
 //
 void impressed( uint32_t UserID_1 , uint32_t UserID_2 ){
-    User::Ads& user1 = userTable[ UserID_1 ].impressions;
-    User::Ads& user2 = userTable[ UserID_2 ].impressions;
+    auto& user1 = userTable[ UserID_1 ].impressions;
+    auto& user2 = userTable[ UserID_2 ].impressions;
+    /* iterator point to pair< adID , adInfo > */
+    auto  it1 = user1.begin(); auto end1 = user1.end();
+    auto  it2 = user2.begin(); auto end2 = user2.end();
+    
+    while( it1 != end1 && it2 != end2 ){
+        if( it1->first < it2->first ) ++it1;
+        else if( it2->first < it1->first ) ++it2;
+        else{
+            auto id = it1->first;
+            printf("%d\n",id);
 
-    User::Ads common;
-    std::set_intersection(user1.begin(),user1.end(),user2.begin(),user2.end(),
-                          std::inserter(common,common.begin()));
-    for( User::Ads::iterator id = common.begin(); id != common.end(); id++ ){
-        printf("%d\n",*id);
-        auto& ad = adMap[ *id ];
+            set< Ad::AdInfo*, Ad::InfoComparator > infoUnion;
+            while( it1 != end1 && it1->first == id ){
+                infoUnion.insert( it1->second );
+                ++it1;
+            }
+            while( it2 != end1 && it2->first == id ){
+                infoUnion.insert( it2->second );
+                ++it2;
+            }
 
-        /* TODO Eliminate duplicate */
-        for( Ad::Information::iterator info = (ad->information).begin(); info != (ad->information).end(); info++ ){
-            printf("%llu %d %d %d %d\n",(*info)->displayURL,
-                                        (*info)->advertiserID,
-                                        (*info)->keywordID,
-                                        (*info)->titleID,
-                                        (*info)->descriptionID);
+            for( auto it = infoUnion.begin(); it != infoUnion.end() ; ++it )
+                printf("\t%llu %d %d %d %d\n",(*it)->displayURL,
+                                              (*it)->advertiserID,
+                                              (*it)->keywordID,
+                                              (*it)->titleID,
+                                              (*it)->descriptionID);
         }
     }
+    
 }
 // output the sorted (UserID), line by line, whose click-through-rate 
 // (total click / total impression) on `AdID` is greater than or equal to `clickThroughRateLowerBound`.
 void profit( uint32_t adID, double lowerBound ){
    Ad::ClickThroughTable& table = adMap[ adID ]->clickThroughTable;
    for( Ad::ClickThroughTable::iterator entry = table.begin(); entry != table.end(); entry++ ) {
-        if( entry->second->clickCount >= (double)entry->second->impressionCount * lowerBound )
-            printf("%d\n", entry->first);
+        if( entry->second.clickCount >= (double)entry->second.impressionCount * lowerBound )
+            printf("%d\n", entry->first); // UserID
    }
 }
 
@@ -108,21 +131,31 @@ inline size_t getFilesize(const char* filename) {
 void read_data(const char* fileName){
     size_t filesize = getFilesize(fileName);
     int fd = open(fileName, O_RDONLY, 0);
-    assert(fd != -1);
+    if( fd == -1 ){
+        cout<<" file open file! \n";
+        exit(1);
+    }
 
+#ifdef DEBUG
     auto mmap_t0 = Clock::now();
+#endif
 
     void* mmappedData = mmap(NULL, filesize, PROT_READ, MAP_PRIVATE | MAP_POPULATE, fd, 0);
-    assert(mmappedData != NULL);
+    if( mmappedData == MAP_FAILED ){
+        cout<<" mmap failed! \n";
+        exit(1);
+    }
 
     char *p = (char*)mmappedData;
 
+
+#ifdef DEBUG
     auto mmap_t1 = Clock::now();
 
     minutes m = std::chrono::duration_cast<minutes>(mmap_t1 - mmap_t0);
     std::cout <<"mmap: time elapsed: "<< m.count() << "min\n";
+#endif
 
-    std::cout<<"Click Impress URL_ID Ad_ID AdverID Dept Pos QueryID KeyWordID TitleID DescriptID UserID"<<std::endl;
     for (int i = 0 ; i < MAX_NUM_ENTRIES ; i++) {
        auto adInfo = new Ad::AdInfo();
        auto ad     = new Ad::Ad();
@@ -142,6 +175,8 @@ void read_data(const char* fileName){
        strToInt<uint32_t>( adInfo->descriptionID, &p);
        strToInt<uint32_t>( key.userID,            &p);
 
+
+#ifdef DEBUG
   std::cout<< value.click << " "
            << value.impression<< " "
            << adInfo->displayURL<< " "
@@ -154,49 +189,75 @@ void read_data(const char* fileName){
            << adInfo->titleID<< " "
            << adInfo->descriptionID<< " "
            << key.userID<< " \n" ;
+#endif
 
-       /* If duplicate found? */
-       /* Implement a duplicate finder at request time */
-       auto insertedAd = adMap.emplace( key.adID, ad );
-       if( !insertedAd.second ){
-           std::cout<<" Ad Entry exist! \n";
-           delete ad;
-       }
-       else{
-           insertedAd.first->second->information.push_back( adInfo );
-       }
+       auto insertedInfo = infoTable.insert( adInfo );
+       if(!insertedInfo.second)
+           delete adInfo;
 
-       /* add entry to userTable */
-       userTable[ key.userID ].impressions.insert( key.adID );
+       userTable[ key.userID ].impressions.insert( User::InfoPair( key.adID,*(insertedInfo.first)) );
 
+#ifdef DEBUG
        printImpression( userTable[ key.userID ].impressions );
+#endif
+
+       auto insertedAd = adMap.emplace( key.adID, ad );
+       insertedAd.first->second->clickThroughTable[ key.userID ].add( value );
+       if( !insertedAd.second ){
+           delete ad;
+
+#ifdef DEBUG
+           std::cout<<" Ad Entry exist! \n";
+#endif
+       }
+
+       insertedAd.first->second->clickThroughTable.emplace( key.userID, Ad::ClickThrough() ).first->second.add( value );
+
 
        auto insertedData = dataMap.emplace( key, value ) ;
        // The key is already in map 
        if( !insertedData.second ){
-           std::cout<<"Data Entry exist! \n";
            insertedData.first->second.update( value );
+
+#ifdef DEBUG
+           std::cout<<"Data Entry exist! \n";
+#endif
+
            if( value.click && userTable[ key.userID ].clicks.empty() ){
+
+#ifdef DEBUG
                cout<<" At least one click"<<std::endl;
+#endif
+
                userTable[ key.userID ].clicks.push_back( std::pair<uint32_t,uint32_t>(key.adID,key.queryID) ); 
                // Insert AdID, QueryID pair
                
+#ifdef DEBUG
                printClick( userTable[ key.userID ].clicks );
+#endif 
 
            }
            continue;
        }
 
        if( value.click ){ // If there's at least one click
+
+#ifdef DEBUG
            cout<<" At least one click"<<std::endl;
-           userTable[ key.userID ].clicks.push_back( std::pair<uint32_t,uint32_t>(key.adID,key.queryID) ); 
+#endif
+
            // Insert AdID, QueryID pair
+           userTable[ key.userID ].clicks.push_back( std::pair<uint32_t,uint32_t>(key.adID,key.queryID) ); 
            
+#ifdef DEBUG
            printClick( userTable[ key.userID ].clicks );
+#endif
+
        }
 
 
     }
+
 }
 int main(int argc, char *argv[])
 {
@@ -210,30 +271,30 @@ int main(int argc, char *argv[])
     minutes m = std::chrono::duration_cast<minutes>(t1 - t0);
     std::cout <<"Read data: time elapsed: "<< m.count() << "min\n";
 
+    printDataMap( dataMap );
 
     std::string command;
 
     
-    uint32_t u,u1,a,q;
-    uint8_t p,d;
+    uint32_t u,u1,a,q,p,d;
     double theta;
     while( std::cin >> command && command != command_quit ){
         std::cout<<"********************\n";
         if( command == command_get ){
-            std::cin >> u >> a >> q >> p >> d;
+            scanf("%d%d%d%d%d",&u,&a,&q,&p,&d);
             Data::Key key( u,a,q,p,d );
             get( key );
         }
         else if( command == command_clicked ){
-            std::cin >> u;
+            scanf("%d",&u);
             clicked( u );
         }
         else if( command == command_impressed ){
-            std::cin >> u >> u1;
+            scanf("%d%d",&u,&u1);
             impressed( u , u1 );
         }
         else if( command == command_profit ){
-            std::cin >> a >> theta;
+            scanf("%d%lf",&a,&theta);
             profit( a , theta );
         }
         std::cout<<"********************\n";
