@@ -1,11 +1,11 @@
 #include <iostream>
 #include <parallel/algorithm>
 #include <chrono>
-#include <algorithm>
 #include <vector>
 #include <iterator>
 #include <cstdio>
 #include <set>
+#include <parallel/algorithm>
 #include <string>
 #include <unordered_map>
 #include <sys/mman.h>
@@ -37,6 +37,7 @@ Data::Map  dataMap; // Key --> Value
 Ad::Map    adMap;   // AdID --> Ad
 Ad::InfoTable infoTable;
 User::User userTable[ MAX_USER_ID ];
+std::set<uint32_t> clickedQueryTable;
 
 void calculateRate(Ad::ClickThroughTable& table);
 
@@ -57,9 +58,17 @@ void get( Data::Key& key ){
    const Data::Value& v = dataMap[ key ]; 
    printf("%d %d\n", v.click, v.impression );
 }
+
+bool clickedComparator( const std::pair<uint32_t,uint32_t>& lhs, const std::pair<uint32_t,uint32_t>& rhs ){
+    return ( lhs.first < rhs.first ) || ( lhs.first == rhs.first && lhs.second < rhs.second );
+}
 // output all (AdID, QueryID) pairs that user u has made at least one click
 void clicked( uint32_t UserID ){
     User::Clicks& clicks = userTable[ UserID ].clicks;
+    if(clickedQueryTable.find(UserID) == clickedQueryTable.end()){
+        __gnu_parallel::sort( clicks.begin(),clicks.end(),clickedComparator );   
+        clickedQueryTable.insert( UserID );
+    }
     for( User::Clicks::iterator c = clicks.begin(); c != clicks.end(); c++ ){
         printf("%d %d\n", c->first, c->second); // AdID , QueryID
     }
@@ -215,14 +224,14 @@ void read_data(const char* fileName){
            insertedData.first->second.update( value );
 
            if( value.click && userTable[ key.userID ].clicks.empty() ){
-               userTable[ key.userID ].clicks.insert( std::pair<uint32_t,uint32_t>(key.adID,key.queryID) ); 
+               userTable[ key.userID ].clicks.push_back( std::pair<uint32_t,uint32_t>(key.adID,key.queryID) ); 
                // Insert AdID, QueryID pair
            }
            continue;
        }
 
        if( value.click ) // If there's at least one click
-           userTable[ key.userID ].clicks.insert( std::pair<uint32_t,uint32_t>(key.adID,key.queryID) ); 
+           userTable[ key.userID ].clicks.push_back( std::pair<uint32_t,uint32_t>(key.adID,key.queryID) ); 
 
 #ifdef DEBUG
            printClick( userTable[ key.userID ].clicks );
@@ -235,9 +244,9 @@ void read_data(const char* fileName){
        }
 #endif
 
-    }
-
 }
+
+
 int main(int argc, char *argv[])
 {
     dataMap.reserve( MAX_NUM_ENTRIES ); 

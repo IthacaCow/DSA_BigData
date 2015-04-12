@@ -1,10 +1,10 @@
 target=bigData.o debug.o
 CC=g++
-CPPFLAGS=-O3 -Wall -g -std=c++11   -pthread -mcmodel=medium #-DDEBUG
-LINKOPTION=-dynamic -mcmodel=medium 
+CPPFLAGS=-O3 -Wall -g -std=c++11 -fopenmp  -pthread -mcmodel=medium #-DDEBUG
+LINKOPTION=-dynamic -mcmodel=medium -fopenmp
 
 all: bigData debug
-	$(CC) main.o debug.o -o bigData
+	$(CC) $(LINKOPTION) main.o debug.o -o bigData
 
 bigData: main.cpp bigData.hpp
 	$(CC) $(CPPFLAGS) -c main.cpp -o main.o

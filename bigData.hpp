@@ -120,7 +120,7 @@ namespace User {
     // using InfoPair = std::pair<uint32_t,Ad::InfoTable::iterator>;
     using InfoPair = std::pair<uint32_t,Ad::AdInfo*>;
     using Ads    = std::set< InfoPair >; // A set of AdIDs + Info
-    using Clicks = std::set< std::pair<uint32_t,uint32_t> >; 
+    using Clicks = std::vector< std::pair<uint32_t,uint32_t> >; 
     // TODO: Check duplicate
 
     struct ClickComparator {
