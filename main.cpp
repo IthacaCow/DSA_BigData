@@ -21,8 +21,8 @@ using namespace std;
 typedef std::chrono::high_resolution_clock Clock;
 typedef std::chrono::seconds seconds;
 
-const int MAX_NUM_ENTRIES = 149639105;
-// const int MAX_NUM_ENTRIES = 11;
+// const int MAX_NUM_ENTRIES = 149639105;
+const int MAX_NUM_ENTRIES = 17;
 const int MAX_NUM_USERS   = 22023547;
 const int MAX_NUM_ADS     = 641707;
 const int MAX_NUM_THREADS = 4;
@@ -39,8 +39,6 @@ Ad::InfoTable infoTable;
 User::User userTable[ MAX_USER_ID ];
 std::set<uint32_t> clickedQueryTable;
 
-void calculateRate(Ad::ClickThroughTable& table);
-
 void cleanUp(){
     for( auto&& it: adMap ){
         delete it.second;
@@ -50,11 +48,6 @@ void cleanUp(){
     }
 }
 void get( Data::Key& key ){
-
-#ifdef DEBUG
-   cout<<"Input: "<<key.userID<<" "<<key.adID<<" "<<key.queryID<<" "<<(int)key.position<<" "<<(int)key.dept<<endl;
-#endif
-
    const Data::Value& v = dataMap[ key ]; 
    printf("%d %d\n", v.click, v.impression );
 }
@@ -237,12 +230,13 @@ void read_data(const char* fileName){
            printClick( userTable[ key.userID ].clicks );
 #endif
 
-       }
 #ifdef DEBUG
        if( i % 10000000 == 0 ) {
            printf("%f % \n",100.0*(float)i/MAX_NUM_ENTRIES);
        }
 #endif
+
+       }
 
 }
 
