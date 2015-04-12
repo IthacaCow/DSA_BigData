@@ -12,7 +12,6 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/stat.h>
-#include <assert.h>
 #include "debug.hpp"
 #include "bigData.hpp"
 
@@ -21,8 +20,8 @@ using namespace std;
 typedef std::chrono::high_resolution_clock Clock;
 typedef std::chrono::minutes minutes;
 
-// const int MAX_NUM_ENTRIES = 149639105;
-const int MAX_NUM_ENTRIES = 11;
+const int MAX_NUM_ENTRIES = 149639105;
+// const int MAX_NUM_ENTRIES = 11;
 const int MAX_NUM_USERS   = 22023547;
 const int MAX_NUM_ADS     = 641707;
 const int MAX_NUM_THREADS = 4;
@@ -49,7 +48,7 @@ void get( Data::Key& key ){
    printf("%d %d\n", v.click, v.impression );
 }
 // output all (AdID, QueryID) pairs that user u has made at least one click
-void clicked( uint32_t UserID ){
+void licked( uint32_t UserID ){
     User::Clicks& clicks = userTable[ UserID ].clicks;
     for( User::Clicks::iterator c = clicks.begin(); c != clicks.end(); c++ ){
         printf("%d %d\n", c->first, c->second); // AdID , QueryID
@@ -108,12 +107,19 @@ inline size_t getFilesize(const char* filename) {
 void read_data(const char* fileName){
     size_t filesize = getFilesize(fileName);
     int fd = open(fileName, O_RDONLY, 0);
-    assert(fd != -1);
+    if( fd == -1 ){
+        cout<<"Fail to read data input\n";
+        exit(1);
+    }
 
     auto mmap_t0 = Clock::now();
 
     void* mmappedData = mmap(NULL, filesize, PROT_READ, MAP_PRIVATE | MAP_POPULATE, fd, 0);
-    assert(mmappedData != NULL);
+
+    if( mmappedData == MAP_FAILED ){
+        cout<<"mmap failed\n";
+        exit(1);
+    }
 
     char *p = (char*)mmappedData;
 
@@ -142,24 +148,24 @@ void read_data(const char* fileName){
        strToInt<uint32_t>( adInfo->descriptionID, &p);
        strToInt<uint32_t>( key.userID,            &p);
 
-  std::cout<< value.click << " "
-           << value.impression<< " "
-           << adInfo->displayURL<< " "
-           << key.adID<< " "
-           << adInfo->advertiserID<< " "
-           << (int)key.dept<< " "
-           << (int)key.position<< " "
-           << key.queryID<< " "
-           << adInfo->keywordID<< " "
-           << adInfo->titleID<< " "
-           << adInfo->descriptionID<< " "
-           << key.userID<< " \n" ;
+  // std::cout<< value.click << " "
+           // << value.impression<< " "
+           // << adInfo->displayURL<< " "
+           // << key.adID<< " "
+           // << adInfo->advertiserID<< " "
+           // << (int)key.dept<< " "
+           // << (int)key.position<< " "
+           // << key.queryID<< " "
+           // << adInfo->keywordID<< " "
+           // << adInfo->titleID<< " "
+           // << adInfo->descriptionID<< " "
+           // << key.userID<< " \n" ;
 
        /* If duplicate found? */
        /* Implement a duplicate finder at request time */
        auto insertedAd = adMap.emplace( key.adID, ad );
        if( !insertedAd.second ){
-           std::cout<<" Ad Entry exist! \n";
+           // std::cout<<" Ad Entry exist! \n";
            delete ad;
        }
        else{
@@ -169,32 +175,35 @@ void read_data(const char* fileName){
        /* add entry to userTable */
        userTable[ key.userID ].impressions.insert( key.adID );
 
-       printImpression( userTable[ key.userID ].impressions );
+       // printImpression( userTable[ key.userID ].impressions );
 
        auto insertedData = dataMap.emplace( key, value ) ;
        // The key is already in map 
        if( !insertedData.second ){
-           std::cout<<"Data Entry exist! \n";
+           // std::cout<<"Data Entry exist! \n";
            insertedData.first->second.update( value );
            if( value.click && userTable[ key.userID ].clicks.empty() ){
-               cout<<" At least one click"<<std::endl;
+               // cout<<" At least one click"<<std::endl;
                userTable[ key.userID ].clicks.push_back( std::pair<uint32_t,uint32_t>(key.adID,key.queryID) ); 
                // Insert AdID, QueryID pair
                
-               printClick( userTable[ key.userID ].clicks );
+               // printClick( userTable[ key.userID ].clicks );
 
            }
            continue;
        }
 
        if( value.click ){ // If there's at least one click
-           cout<<" At least one click"<<std::endl;
+           // cout<<" At least one click"<<std::endl;
            userTable[ key.userID ].clicks.push_back( std::pair<uint32_t,uint32_t>(key.adID,key.queryID) ); 
            // Insert AdID, QueryID pair
            
-           printClick( userTable[ key.userID ].clicks );
+           // printClick( userTable[ key.userID ].clicks );
        }
 
+       if( i % 100000 == 0 ) {
+           printf("%d\n",i);
+       }
 
     }
 }
