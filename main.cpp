@@ -19,7 +19,7 @@
 using namespace std;
 
 typedef std::chrono::high_resolution_clock Clock;
-typedef std::chrono::minutes minutes;
+typedef std::chrono::seconds seconds;
 
 const int MAX_NUM_ENTRIES = 149639105;
 // const int MAX_NUM_ENTRIES = 11;
@@ -58,7 +58,7 @@ void get( Data::Key& key ){
    printf("%d %d\n", v.click, v.impression );
 }
 // output all (AdID, QueryID) pairs that user u has made at least one click
-void licked( uint32_t UserID ){
+void clicked( uint32_t UserID ){
     User::Clicks& clicks = userTable[ UserID ].clicks;
     for( User::Clicks::iterator c = clicks.begin(); c != clicks.end(); c++ ){
         printf("%d %d\n", c->first, c->second); // AdID , QueryID
@@ -152,8 +152,8 @@ void read_data(const char* fileName){
 #ifdef DEBUG
     auto mmap_t1 = Clock::now();
 
-    minutes m = std::chrono::duration_cast<minutes>(mmap_t1 - mmap_t0);
-    std::cout <<"mmap: time elapsed: "<< m.count() << "min\n";
+    seconds m = std::chrono::duration_cast<seconds>(mmap_t1 - mmap_t0);
+    std::cout <<"mmap: time elapsed: "<< m.count() << " seconds\n";
 #endif
 
     for (int i = 0 ; i < MAX_NUM_ENTRIES ; i++) {
@@ -253,10 +253,11 @@ void read_data(const char* fileName){
 #endif
 
        }
-
-       if( i % 100000 == 0 ) {
-           printf("%d\n",i);
+#ifdef DEBUG
+       if( i % 10000000 == 0 ) {
+           printf("%f % \n",100.0*(float)i/MAX_NUM_ENTRIES);
        }
+#endif
 
     }
 
@@ -270,14 +271,15 @@ int main(int argc, char *argv[])
     read_data(argv[1]);
     auto t1 = Clock::now();
 
-    minutes m = std::chrono::duration_cast<minutes>(t1 - t0);
-    std::cout <<"Read data: time elapsed: "<< m.count() << "min\n";
+    seconds m = std::chrono::duration_cast<seconds>(t1 - t0);
+    std::cout <<"Read data: time elapsed: "<< m.count() << " seconds\n";
 
-    printDataMap( dataMap );
 
     std::string command;
 
     
+    auto t0_process = Clock::now();
+
     uint32_t u,u1,a,q,p,d;
     double theta;
     while( std::cin >> command && command != command_quit ){
@@ -301,6 +303,11 @@ int main(int argc, char *argv[])
         }
         std::cout<<"********************\n";
     }
+
+    auto t1_process = Clock::now();
+    seconds m1 = std::chrono::duration_cast<seconds>(t1_process - t0_process);
+    std::cout <<"Query data: time elapsed: "<< m1.count() << " seconds\n";
+    std::cout <<"Total time elapsed: "<< m.count() + m1.count() << " seconds\n";
 
     cleanUp();
     return 0;
