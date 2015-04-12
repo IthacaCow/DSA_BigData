@@ -13,17 +13,16 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/stat.h>
-#include <assert.h>
 #include "debug.hpp"
 #include "bigData.hpp"
 
 using namespace std;
 
 typedef std::chrono::high_resolution_clock Clock;
-typedef std::chrono::minutes minutes;
+typedef std::chrono::seconds seconds;
 
-// const int MAX_NUM_ENTRIES = 149639105;
-const int MAX_NUM_ENTRIES = 11;
+const int MAX_NUM_ENTRIES = 149639105;
+// const int MAX_NUM_ENTRIES = 11;
 const int MAX_NUM_USERS   = 22023547;
 const int MAX_NUM_ADS     = 641707;
 const int MAX_NUM_THREADS = 4;
@@ -132,7 +131,7 @@ void read_data(const char* fileName){
     size_t filesize = getFilesize(fileName);
     int fd = open(fileName, O_RDONLY, 0);
     if( fd == -1 ){
-        cout<<" file open file! \n";
+        cout<<"Fail to read data input\n";
         exit(1);
     }
 
@@ -141,8 +140,9 @@ void read_data(const char* fileName){
 #endif
 
     void* mmappedData = mmap(NULL, filesize, PROT_READ, MAP_PRIVATE | MAP_POPULATE, fd, 0);
+
     if( mmappedData == MAP_FAILED ){
-        cout<<" mmap failed! \n";
+        cout<<"mmap failed\n";
         exit(1);
     }
 
@@ -152,8 +152,8 @@ void read_data(const char* fileName){
 #ifdef DEBUG
     auto mmap_t1 = Clock::now();
 
-    minutes m = std::chrono::duration_cast<minutes>(mmap_t1 - mmap_t0);
-    std::cout <<"mmap: time elapsed: "<< m.count() << "min\n";
+    seconds m = std::chrono::duration_cast<seconds>(mmap_t1 - mmap_t0);
+    std::cout <<"mmap: time elapsed: "<< m.count() << " seconds\n";
 #endif
 
     for (int i = 0 ; i < MAX_NUM_ENTRIES ; i++) {
@@ -174,7 +174,6 @@ void read_data(const char* fileName){
        strToInt<uint32_t>( adInfo->titleID,       &p);
        strToInt<uint32_t>( adInfo->descriptionID, &p);
        strToInt<uint32_t>( key.userID,            &p);
-
 
 #ifdef DEBUG
   std::cout<< value.click << " "
@@ -227,8 +226,14 @@ void read_data(const char* fileName){
 
 #ifdef DEBUG
            printClick( userTable[ key.userID ].clicks );
-#endif 
+#endif
 
+       }
+#ifdef DEBUG
+       if( i % 10000000 == 0 ) {
+           printf("%f % \n",100.0*(float)i/MAX_NUM_ENTRIES);
+       }
+#endif
 
     }
 
@@ -242,14 +247,15 @@ int main(int argc, char *argv[])
     read_data(argv[1]);
     auto t1 = Clock::now();
 
-    minutes m = std::chrono::duration_cast<minutes>(t1 - t0);
-    std::cout <<"Read data: time elapsed: "<< m.count() << "min\n";
+    seconds m = std::chrono::duration_cast<seconds>(t1 - t0);
+    std::cout <<"Read data: time elapsed: "<< m.count() << " seconds\n";
 
-    printDataMap( dataMap );
 
     std::string command;
 
     
+    auto t0_process = Clock::now();
+
     uint32_t u,u1,a,q,p,d;
     double theta;
     while( std::cin >> command && command != command_quit ){
@@ -273,6 +279,11 @@ int main(int argc, char *argv[])
         }
         std::cout<<"********************\n";
     }
+
+    auto t1_process = Clock::now();
+    seconds m1 = std::chrono::duration_cast<seconds>(t1_process - t0_process);
+    std::cout <<"Query data: time elapsed: "<< m1.count() << " seconds\n";
+    std::cout <<"Total time elapsed: "<< m.count() + m1.count() << " seconds\n";
 
     cleanUp();
     return 0;

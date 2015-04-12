@@ -1,6 +1,6 @@
 target=bigData.o debug.o
 CC=g++
-CPPFLAGS=-O3 -Wall -g -std=c++11  -DDEBUG -pthread -mcmodel=medium 
+CPPFLAGS=-O3 -Wall -g -std=c++11   -pthread -mcmodel=medium #-DDEBUG
 LINKOPTION=-dynamic -mcmodel=medium 
 
 all: bigData debug
