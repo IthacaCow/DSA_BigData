@@ -205,10 +205,6 @@ void read_data(const char* fileName){
        insertedAd.first->second->clickThroughTable[ key.userID ].add( value );
        if( !insertedAd.second ){
            delete ad;
-
-#ifdef DEBUG
-           std::cout<<" Ad Entry exist! \n";
-#endif
        }
 
        insertedAd.first->second->clickThroughTable.emplace( key.userID, Ad::ClickThrough() ).first->second.add( value );
@@ -219,41 +215,19 @@ void read_data(const char* fileName){
        if( !insertedData.second ){
            insertedData.first->second.update( value );
 
-#ifdef DEBUG
-           std::cout<<"Data Entry exist! \n";
-#endif
-
            if( value.click && userTable[ key.userID ].clicks.empty() ){
-
-#ifdef DEBUG
-               cout<<" At least one click"<<std::endl;
-#endif
-
-               userTable[ key.userID ].clicks.push_back( std::pair<uint32_t,uint32_t>(key.adID,key.queryID) ); 
+               userTable[ key.userID ].clicks.insert( std::pair<uint32_t,uint32_t>(key.adID,key.queryID) ); 
                // Insert AdID, QueryID pair
-               
-#ifdef DEBUG
-               printClick( userTable[ key.userID ].clicks );
-#endif 
-
            }
            continue;
        }
 
-       if( value.click ){ // If there's at least one click
+       if( value.click ) // If there's at least one click
+           userTable[ key.userID ].clicks.insert( std::pair<uint32_t,uint32_t>(key.adID,key.queryID) ); 
 
-#ifdef DEBUG
-           cout<<" At least one click"<<std::endl;
-#endif
-
-           // Insert AdID, QueryID pair
-           userTable[ key.userID ].clicks.push_back( std::pair<uint32_t,uint32_t>(key.adID,key.queryID) ); 
-           
 #ifdef DEBUG
            printClick( userTable[ key.userID ].clicks );
-#endif
-
-       }
+#endif 
 
 
     }

@@ -62,12 +62,9 @@ namespace Data {
 namespace Ad {
 
     struct ClickThrough {
-        uint32_t clickCount;
-        uint32_t impressionCount;
+        uint32_t clickCount = 0;
+        uint32_t impressionCount = 0;
 
-        ClickThrough(){
-            clickCount = impressionCount = 0;
-        }
         void add( Data::Value& value ){
             if( value.click )clickCount += value.click;
             impressionCount += value.impression;
@@ -123,7 +120,7 @@ namespace User {
     // using InfoPair = std::pair<uint32_t,Ad::InfoTable::iterator>;
     using InfoPair = std::pair<uint32_t,Ad::AdInfo*>;
     using Ads    = std::set< InfoPair >; // A set of AdIDs + Info
-    using Clicks = std::vector< std::pair<uint32_t,uint32_t> >; 
+    using Clicks = std::set< std::pair<uint32_t,uint32_t> >; 
     // TODO: Check duplicate
 
     struct ClickComparator {
