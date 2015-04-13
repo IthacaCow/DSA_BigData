@@ -62,8 +62,13 @@ void clicked( uint32_t UserID ){
         __gnu_parallel::sort( clicks.begin(),clicks.end(),clickedComparator );   
         clickedQueryTable.insert( UserID );
     }
-    for( User::Clicks::iterator c = clicks.begin(); c != clicks.end(); c++ ){
-        printf("%d %d\n", c->first, c->second); // AdID , QueryID
+    auto head = clicks.begin();
+    auto it   = head;
+    while (++head != clicks.end()){
+        if (!(*result == *head))  {
+            printf("%d %d\n", it->first, it->second); // AdID , QueryID
+            ++it;
+        }
     }
 }
 //
