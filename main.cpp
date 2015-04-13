@@ -28,8 +28,11 @@ typedef std::chrono::high_resolution_clock Clock;
 typedef std::chrono::seconds seconds;
 #endif
 
+#ifdef DEBUG
+const int MAX_NUM_ENTRIES = 29;
+#else
 const int MAX_NUM_ENTRIES = 149639105;
-// const int MAX_NUM_ENTRIES = 11;
+#endif
 const int MAX_NUM_USERS   = 22023547;
 const int MAX_NUM_ADS     = 641707;
 
@@ -132,15 +135,10 @@ void profit(void){
    scanf("%d%lf",&adID,&lowerBound);
 
    auto it = adMap.find( adID );
-   if( it == adMap.end() ){
-        printf("%d\n", entry->first); // UserID
-   }
-   else{
-       auto& table = it->clickThroughTable;
+   if( it != adMap.end() ){
+       auto& table = it->second->clickThroughTable;
        for( auto entry = table.begin(); entry != table.end(); ++entry ) {
             if( entry->second.clickCount >= (double)entry->second.impressionCount * lowerBound ){
-                if( entry->second.impressionCount == 0 && lowerBound > 0.0 )
-                    continue;
                 printf("%d\n", entry->first); // UserID
             }
        }
@@ -245,15 +243,8 @@ void read_data(const char* fileName){
 
        auto insertedData = dataMap.emplace( key, value ) ;
        // The key is already in map 
-       if( !insertedData.second ){
+       if( !insertedData.second )
            insertedData.first->second.update( value );
-
-           if( value.click && userTable[ key.userID ].clicks.empty() ){
-               userTable[ key.userID ].clicks.push_back( std::pair<uint32_t,uint32_t>(key.adID,key.queryID) ); 
-               // Insert AdID, QueryID pair
-           }
-           continue;
-       }
 
        if( value.click ) // If there's at least one click
            userTable[ key.userID ].clicks.push_back( std::pair<uint32_t,uint32_t>(key.adID,key.queryID) ); 

@@ -33,32 +33,32 @@ namespace Data {
 
     };
 
-    struct KeyHash {
-        std::size_t operator()(const Key& key) const {
-            using boost::hash_value;
-            using boost::hash_combine;
-
-            std::size_t hash = 0;
-            hash_combine(hash,hash_value(key.userID));
-            hash_combine(hash,hash_value(key.adID));
-            hash_combine(hash,hash_value(key.queryID));
-            hash_combine(hash,hash_value(key.position));
-            hash_combine(hash,hash_value(key.dept));
-            return hash;
-        }
-    };
     // struct KeyHash {
         // std::size_t operator()(const Key& key) const {
-            // const std::size_t prime = 92821;
-            // std::size_t hash = 486187739;
-            // hash = (hash * prime) ^ key.userID;
-            // hash = (hash * prime) ^ key.adID;
-            // hash = (hash * prime) ^ key.queryID;
-            // hash = (hash * prime) ^ key.position;
-            // hash = (hash * prime) ^ key.dept;
+            // using boost::hash_value;
+            // using boost::hash_combine;
+
+            // std::size_t hash = 0;
+            // hash_combine(hash,hash_value(key.userID));
+            // hash_combine(hash,hash_value(key.adID));
+            // hash_combine(hash,hash_value(key.queryID));
+            // hash_combine(hash,hash_value(key.position));
+            // hash_combine(hash,hash_value(key.dept));
             // return hash;
         // }
     // };
+    struct KeyHash {
+        std::size_t operator()(const Key& key) const {
+            const std::size_t prime = 92821;
+            std::size_t hash = 486187739;
+            hash = (hash * prime) ^ key.userID;
+            hash = (hash * prime) ^ key.adID;
+            hash = (hash * prime) ^ key.queryID;
+            hash = (hash * prime) ^ key.position;
+            hash = (hash * prime) ^ key.dept;
+            return hash;
+        }
+    };
 
     
     struct Value {

@@ -6,6 +6,9 @@ LINKOPTION=-dynamic -mcmodel=medium -fopenmp
 demo: main.cpp bigData.hpp
 	$(CC) $(CPPFLAGS) main.cpp -o demo
 
+testClicked: main.cpp bigData.hpp
+	$(CC) $(CPPFLAGS) main.cpp -o testClicked
+
 debug_all: bigData debug
 	$(CC) $(LINKOPTION) main.o debug.o -o bigData
 
