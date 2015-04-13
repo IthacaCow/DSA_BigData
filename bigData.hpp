@@ -27,9 +27,9 @@ namespace Data {
             return !operator==(rhs);
         }
 
-        Key(){}
-        Key(uint32_t u, uint32_t a, uint32_t q, uint8_t p, uint8_t d):
-            userID(u),adID(a),queryID(q),position(p),dept(d){}
+        // Key(){}
+        // Key(uint32_t u, uint32_t a, uint32_t q, uint8_t p, uint8_t d):
+            // userID(u),adID(a),queryID(q),position(p),dept(d){}
 
     };
 

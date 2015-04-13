@@ -1,6 +1,5 @@
 #include <iostream>
 #include <parallel/algorithm>
-#include <chrono>
 #include <vector>
 #include <iterator>
 #include <cstdio>
@@ -13,19 +12,26 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/stat.h>
-#include "debug.hpp"
 #include "bigData.hpp"
+
+#ifdef DEBUG
+#include "debug.hpp"
+#endif
+#ifdef BENCHMARK 
+#include <chrono>
+#endif
 
 using namespace std;
 
+#ifdef BENCHMARK 
 typedef std::chrono::high_resolution_clock Clock;
 typedef std::chrono::seconds seconds;
+#endif
 
 const int MAX_NUM_ENTRIES = 149639105;
-// const int MAX_NUM_ENTRIES = 300500;
+// const int MAX_NUM_ENTRIES = 11;
 const int MAX_NUM_USERS   = 22023547;
 const int MAX_NUM_ADS     = 641707;
-const int MAX_NUM_THREADS = 4;
 
 const std::string command_quit      = "quit";
 const std::string command_clicked   = "clicked";
@@ -47,8 +53,10 @@ void cleanUp(){
         delete it;
     }
 }
-void get( Data::Key& key ){
-   const Data::Value& v = dataMap[ key ]; 
+void get(void){
+   Data::Key k;
+   scanf("%d%d%d%d%d",&k.userID,&k.adID,&k.queryID,&k.position,&k.dept);
+   const Data::Value& v = dataMap[k]; 
    printf("%d %d\n", v.click, v.impression );
 }
 
@@ -56,19 +64,23 @@ bool clickedComparator( const std::pair<uint32_t,uint32_t>& lhs, const std::pair
     return ( lhs.first < rhs.first ) || ( lhs.first == rhs.first && lhs.second < rhs.second );
 }
 // output all (AdID, QueryID) pairs that user u has made at least one click
-void clicked( uint32_t UserID ){
+void clicked(void){
+    uint32_t UserID;
+    scanf("%d",&UserID);
+
     User::Clicks& clicks = userTable[ UserID ].clicks;
     if(clickedQueryTable.find(UserID) == clickedQueryTable.end()){
         __gnu_parallel::sort( clicks.begin(),clicks.end(),clickedComparator );   
         clickedQueryTable.insert( UserID );
-    }
-    auto head = clicks.begin();
-    auto it   = head;
-    while (++head != clicks.end()){
-        if (!(*result == *head))  {
-            printf("%d %d\n", it->first, it->second); // AdID , QueryID
-            ++it;
-        }
+    } 
+    auto it = clicks.begin();
+    User::Clicks::iterator head;
+    while (it != clicks.end()){
+        printf("%d %d\n", it->first, it->second); // AdID , QueryID
+        head = it+1;
+        while (head != clicks.end() && it->first == head->first && it->second == head->second)
+           ++head; 
+        it = head;
     }
 }
 //
@@ -76,7 +88,9 @@ void clicked( uint32_t UserID ){
 // (DisplayURL), (AdvertiserID), (KeywordID), (TitleID), (DescriptionID) 
 // that both users u1 and u2 has at least one impression on
 //
-void impressed( uint32_t UserID_1 , uint32_t UserID_2 ){
+void impressed(void){
+    uint32_t UserID_1,UserID_2;
+    scanf("%d%d",&UserID_1,&UserID_2);
     auto& user1 = userTable[ UserID_1 ].impressions;
     auto& user2 = userTable[ UserID_2 ].impressions;
     /* iterator point to pair< adID , adInfo > */
@@ -112,11 +126,24 @@ void impressed( uint32_t UserID_1 , uint32_t UserID_2 ){
 }
 // output the sorted (UserID), line by line, whose click-through-rate 
 // (total click / total impression) on `AdID` is greater than or equal to `clickThroughRateLowerBound`.
-void profit( uint32_t adID, double lowerBound ){
-   Ad::ClickThroughTable& table = adMap[ adID ]->clickThroughTable;
-   for( Ad::ClickThroughTable::iterator entry = table.begin(); entry != table.end(); entry++ ) {
-        if( entry->second.clickCount >= (double)entry->second.impressionCount * lowerBound )
-            printf("%d\n", entry->first); // UserID
+void profit(void){
+   uint32_t adID;
+   double lowerBound;
+   scanf("%d%lf",&adID,&lowerBound);
+
+   auto it = adMap.find( adID );
+   if( it == adMap.end() ){
+        printf("%d\n", entry->first); // UserID
+   }
+   else{
+       auto& table = it->clickThroughTable;
+       for( auto entry = table.begin(); entry != table.end(); ++entry ) {
+            if( entry->second.clickCount >= (double)entry->second.impressionCount * lowerBound ){
+                if( entry->second.impressionCount == 0 && lowerBound > 0.0 )
+                    continue;
+                printf("%d\n", entry->first); // UserID
+            }
+       }
    }
 }
 
@@ -251,47 +278,50 @@ int main(int argc, char *argv[])
     dataMap.reserve( MAX_NUM_ENTRIES ); 
       adMap.reserve( MAX_NUM_ADS );
 
+#ifdef BENCHMARK
     auto t0 = Clock::now();
+#endif
     read_data(argv[1]);
+#ifdef BENCHMARK
     auto t1 = Clock::now();
+#endif
 
+#ifdef BENCHMARK
     seconds m = std::chrono::duration_cast<seconds>(t1 - t0);
     std::cout <<"Read data: time elapsed: "<< m.count() << " seconds\n";
+#endif
 
 
     std::string command;
 
     
+#ifdef BENCHMARK
     auto t0_process = Clock::now();
+#endif
 
-    uint32_t u,u1,a,q,p,d;
-    double theta;
     while( std::cin >> command && command != command_quit ){
         std::cout<<"********************\n";
         if( command == command_get ){
-            scanf("%d%d%d%d%d",&u,&a,&q,&p,&d);
-            Data::Key key( u,a,q,p,d );
-            get( key );
+            get();
         }
         else if( command == command_clicked ){
-            scanf("%d",&u);
-            clicked( u );
+            clicked();
         }
         else if( command == command_impressed ){
-            scanf("%d%d",&u,&u1);
-            impressed( u , u1 );
+            impressed();
         }
         else if( command == command_profit ){
-            scanf("%d%lf",&a,&theta);
-            profit( a , theta );
+            profit();
         }
         std::cout<<"********************\n";
     }
 
+#ifdef BENCHMARK
     auto t1_process = Clock::now();
     seconds m1 = std::chrono::duration_cast<seconds>(t1_process - t0_process);
     std::cout <<"Query data: time elapsed: "<< m1.count() << " seconds\n";
     std::cout <<"Total time elapsed: "<< m.count() + m1.count() << " seconds\n";
+#endif
 
     cleanUp();
     return 0;
